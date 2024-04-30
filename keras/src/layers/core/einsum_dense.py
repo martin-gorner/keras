@@ -198,8 +198,8 @@ class EinsumDense(Layer):
                 "You must build the layer before accessing `kernel`."
             )
         if self.lora_enabled:
-            return self._kernel + ops.matmul(
-                self.lora_kernel_a, self.lora_kernel_b
+            return self._kernel + ops.einsum(
+                "...ir, ...rj -> ...ij", self.lora_kernel_a, self.lora_kernel_b
             )
         return self._kernel
 
@@ -232,6 +232,11 @@ class EinsumDense(Layer):
                 "lora is already enabled. "
                 "This can only be done once per layer."
             )
+        if len(self.kernel.shape) < 2:
+            raise ValueError(
+                "Cannot enable lora on a layer where the kernel tensor has rank"
+                " less than 2."
+            )
         self._tracker.unlock()
         self.lora_kernel_a = self.add_weight(
             name="lora_kernel_a",
@@ -241,7 +246,7 @@ class EinsumDense(Layer):
         )
         self.lora_kernel_b = self.add_weight(
             name="lora_kernel_b",
-            shape=(rank, self.kernel.shape[-1]),
+            shape=(self.kernel.shape[:-2] + (rank, self.kernel.shape[-1])),
             initializer=initializers.get(b_initializer),
             regularizer=self.kernel_regularizer,
         )
